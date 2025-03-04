@@ -45,7 +45,7 @@ function displaySummary(output) {
   // Attach a Shadow DOM for isolation from page styles
   const shadow = container.attachShadow({ mode: 'open' });
   
-  // Define our styles and header styles
+  // Define our styles along with header and bullet styling
   const style = document.createElement("style");
   style.textContent = `
     :host {
@@ -77,7 +77,7 @@ function displaySummary(output) {
     }
     .close-btn {
       color: red;
-      font-size: 20px;
+      font-size: 24px;
       cursor: pointer;
     }
     .content {
@@ -112,8 +112,6 @@ function displaySummary(output) {
   const header = document.createElement("div");
   header.className = "header";
   header.innerHTML = `<span>ToS Summarization</span><span class="close-btn">✖</span>`;
-  
-  // Add close button functionality
   header.querySelector(".close-btn").addEventListener("click", () => {
     container.remove();
   });
@@ -124,17 +122,15 @@ function displaySummary(output) {
   
   let htmlContent = "";
   const lines = output.split("\n");
+  // Only include lines that start with GOOD or BAD (optionally prefixed with "*")
   lines.forEach(line => {
     const trimmed = line.trim();
-    // Check for either "* GOOD:" or "GOOD:" at the beginning
     if (trimmed.match(/^(\*\s*)?GOOD:/i)) {
       const text = trimmed.replace(/^(\*\s*)?GOOD:/i, "").trim();
       htmlContent += `<p class="good-bullet"><span class="icon">👍</span>${text}</p>`;
     } else if (trimmed.match(/^(\*\s*)?BAD:/i)) {
       const text = trimmed.replace(/^(\*\s*)?BAD:/i, "").trim();
       htmlContent += `<p class="bad-bullet"><span class="icon">👎</span>${text}</p>`;
-    } else if (trimmed.length > 0) {
-      htmlContent += `<p>${trimmed}</p>`;
     }
   });
   content.innerHTML = htmlContent;
@@ -200,22 +196,21 @@ if (window.location.href.includes("google.com/search")) {
   if (isAgreementCandidate || isNonAgreementCandidate) {
     console.log("Candidate for summarization detected.");
     const prompt = `
-    Please analyze the following text:
-    
-    "${mainText}"
-    
-    Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or a similar legal document. If it is not, simply respond with "N/A" and no additional text.
-    
-    If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following exact format:
-    
-    * GOOD: [Description of an important beneficial clause]
-    * GOOD: [Another beneficial clause]
-    * BAD: [Description of an important detrimental clause]
-    * BAD: [Another detrimental clause]
-    
-    Ensure that each beneficial clause is labeled with "GOOD:" and each detrimental clause with "BAD:"—do not mix or include any extra text beyond these bullet points. This format is crucial.
+Please analyze the following text:
+  
+"${mainText}"
+  
+Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or similar legal document. If it is not, simply respond with "N/A" and no additional text.
+
+If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following exact format:
+
+* GOOD: [Description of an important beneficial clause]
+* GOOD: [Another beneficial clause]
+* BAD: [Description of an important detrimental clause]
+* BAD: [Another detrimental clause]
+
+Ensure that each beneficial clause is labeled with "GOOD:" and each detrimental clause with "BAD:" — do not mix or include any extra text beyond these bullet points.
     `;
-    
     console.log("Sending prompt to LLaMA model...");
     sendToLLAMAModel(prompt);
   } else {

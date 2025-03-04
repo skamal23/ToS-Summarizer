@@ -200,21 +200,22 @@ if (window.location.href.includes("google.com/search")) {
   if (isAgreementCandidate || isNonAgreementCandidate) {
     console.log("Candidate for summarization detected.");
     const prompt = `
-Please analyze the following text:
-
-"${mainText}"
-
-Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or a similar legal document. If it is not, simply respond with "N/A" and no additional text.
-
-If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following format:
-
-* GOOD: [Description of an important beneficial clause]
-* GOOD: [Another beneficial clause]
-* BAD: [Description of an important detrimental clause]
-* BAD: [Another detrimental clause]
-
-Do not include any extra text beyond these bullet points. This is important.
-`;
+    Please analyze the following text:
+    
+    "${mainText}"
+    
+    Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or a similar legal document. If it is not, simply respond with "N/A" and no additional text.
+    
+    If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following exact format:
+    
+    * GOOD: [Description of an important beneficial clause]
+    * GOOD: [Another beneficial clause]
+    * BAD: [Description of an important detrimental clause]
+    * BAD: [Another detrimental clause]
+    
+    Ensure that each beneficial clause is labeled with "GOOD:" and each detrimental clause with "BAD:"—do not mix or include any extra text beyond these bullet points. This format is crucial.
+    `;
+    
     console.log("Sending prompt to LLaMA model...");
     sendToLLAMAModel(prompt);
   } else {

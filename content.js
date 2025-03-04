@@ -5,7 +5,6 @@ function getMainContentText() {
   return clonedBody.innerText;
 }
 
-
 const agreementKeyPhrases = [
   "terms of service",
   "terms of use",
@@ -32,7 +31,6 @@ function countOccurrencesForPhrases(text, phrases) {
   return totalCount;
 }
 
-
 function countPhraseOccurrences(text, phrase) {
   const regex = new RegExp(phrase, 'gi');
   const matches = text.match(regex);
@@ -40,68 +38,112 @@ function countPhraseOccurrences(text, phrase) {
 }
 
 function displaySummary(output) {
+  // Create a container for the popup
   const container = document.createElement("div");
   container.id = "tos-summary-box";
   
+  // Attach a Shadow DOM for isolation from page styles
   const shadow = container.attachShadow({ mode: 'open' });
+  
+  // Define our styles and header styles
   const style = document.createElement("style");
   style.textContent = `
     :host {
       position: fixed;
       top: 20px;
       right: 20px;
-      width: 300px;
-      max-height: 400px;
-      overflow-y: auto;
-      background: #fff;
+      width: 350px;
+      height: 350px;
+      background-color: #fff;
       border: 1px solid #ccc;
-      padding: 15px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
       z-index: 10000;
-      font-family: Arial, sans-serif;
+      font-family: 'Roboto', Arial, sans-serif;
       font-size: 14px;
       line-height: 1.5;
       border-radius: 4px;
+      display: flex;
+      flex-direction: column;
     }
-    p {
-      margin: 10px 0;
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #fff;
+      border-bottom: 1px solid #ccc;
+      padding: 10px;
+      font-weight: bold;
+      font-size: 16px;
     }
-    .good {
-      color: green;
-      font-size: 18px;
-      vertical-align: middle;
-      margin-right: 5px;
-    }
-    .bad {
+    .close-btn {
       color: red;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .content {
+      padding: 10px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .good-bullet {
+      background-color: #e6f9e6; /* light green */
+      padding: 8px;
+      border-radius: 3px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+    }
+    .bad-bullet {
+      background-color: #ffe6e6; /* light red */
+      padding: 8px;
+      border-radius: 3px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+    }
+    .icon {
       font-size: 18px;
-      vertical-align: middle;
-      margin-right: 5px;
+      margin-right: 8px;
     }
   `;
   shadow.appendChild(style);
   
-
-  const content = document.createElement("div");
-  let htmlContent = "";
+  // Create header element with title and close button
+  const header = document.createElement("div");
+  header.className = "header";
+  header.innerHTML = `<span>ToS Summarization</span><span class="close-btn">✖</span>`;
   
- 
+  // Add close button functionality
+  header.querySelector(".close-btn").addEventListener("click", () => {
+    container.remove();
+  });
+  
+  // Create content container
+  const content = document.createElement("div");
+  content.className = "content";
+  
+  let htmlContent = "";
   const lines = output.split("\n");
   lines.forEach(line => {
     const trimmed = line.trim();
-    if (trimmed.startsWith("GOOD:")) {
-      const text = trimmed.replace("GOOD:", "").trim();
-      htmlContent += `<p><span class="good">👍</span>${text}</p>`;
-    } else if (trimmed.startsWith("BAD:")) {
-      const text = trimmed.replace("BAD:", "").trim();
-      htmlContent += `<p><span class="bad">👎</span>${text}</p>`;
+    // Check for either "* GOOD:" or "GOOD:" at the beginning
+    if (trimmed.match(/^(\*\s*)?GOOD:/i)) {
+      const text = trimmed.replace(/^(\*\s*)?GOOD:/i, "").trim();
+      htmlContent += `<p class="good-bullet"><span class="icon">👍</span>${text}</p>`;
+    } else if (trimmed.match(/^(\*\s*)?BAD:/i)) {
+      const text = trimmed.replace(/^(\*\s*)?BAD:/i, "").trim();
+      htmlContent += `<p class="bad-bullet"><span class="icon">👎</span>${text}</p>`;
     } else if (trimmed.length > 0) {
       htmlContent += `<p>${trimmed}</p>`;
     }
   });
-  
   content.innerHTML = htmlContent;
+  
+  // Append header and content to shadow DOM
+  shadow.appendChild(header);
   shadow.appendChild(content);
+  
+  // Append the container to the document body
   document.body.appendChild(container);
 }
 
@@ -114,18 +156,15 @@ function sendToLLAMAModel(prompt) {
     body: JSON.stringify({
       "model": "meta-llama/llama-3.3-70b-instruct:free",
       "messages": [
-        {
-          "role": "user",
-          "content": prompt
-        }
+        { "role": "user", "content": prompt }
       ],
       "temperature": 0
     })
   })
   .then(response => response.json())
   .then(data => {
-    const output = data.choices && data.choices[0] 
-      ? data.choices[0].message.content 
+    const output = data.choices && data.choices[0]
+      ? data.choices[0].message.content
       : "No output";
     console.log("LLaMA model output:", output);
     if (output.trim() !== "N/A") {
@@ -160,17 +199,22 @@ if (window.location.href.includes("google.com/search")) {
   
   if (isAgreementCandidate || isNonAgreementCandidate) {
     console.log("Candidate for summarization detected.");
-    
     const prompt = `
 Please analyze the following text:
-  
+
 "${mainText}"
-  
-First, determine if this text represents a dedicated Terms of Service, User Agreement, Privacy Policy, or similar legal document. 
-If it is not, simply respond with "N/A" and nothing else, no additional text. 
-If it is, separate the beneficial/good parts of the ToS with the potentially detrimental/dangerous aspects, putting "GOOD:" in front of each good bullet point and "BAD:" in front of each bad bullet point. Keep ONLY the most important bullet points, not unnecessary additional information. Keep each bullet point succinct yet accurate and highlight the key points and important clauses. Make the language simple to understand but still indicative of the terms. Do not add any other text besides the good and the bad bullets.
-    `;
-    
+
+Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or a similar legal document. If it is not, simply respond with "N/A" and no additional text.
+
+If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following format:
+
+* GOOD: [Description of an important beneficial clause]
+* GOOD: [Another beneficial clause]
+* BAD: [Description of an important detrimental clause]
+* BAD: [Another detrimental clause]
+
+Do not include any extra text beyond these bullet points. This is important.
+`;
     console.log("Sending prompt to LLaMA model...");
     sendToLLAMAModel(prompt);
   } else {

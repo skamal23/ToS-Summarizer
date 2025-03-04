@@ -45,7 +45,7 @@ function displaySummary(output) {
   // Attach a Shadow DOM for isolation from page styles
   const shadow = container.attachShadow({ mode: 'open' });
   
-  // Define our styles along with header and bullet styling
+  // Define our styles, header, and bullet styling
   const style = document.createElement("style");
   style.textContent = `
     :host {
@@ -115,28 +115,37 @@ function displaySummary(output) {
   header.querySelector(".close-btn").addEventListener("click", () => {
     container.remove();
   });
+  shadow.appendChild(header);
   
   // Create content container
   const content = document.createElement("div");
   content.className = "content";
   
-  let htmlContent = "";
+  // Group lines manually by GOOD and BAD
+  const goodBullets = [];
+  const badBullets = [];
+  
   const lines = output.split("\n");
-  // Only include lines that start with GOOD or BAD (optionally prefixed with "*")
   lines.forEach(line => {
     const trimmed = line.trim();
     if (trimmed.match(/^(\*\s*)?GOOD:/i)) {
-      const text = trimmed.replace(/^(\*\s*)?GOOD:/i, "").trim();
-      htmlContent += `<p class="good-bullet"><span class="icon">👍</span>${text}</p>`;
+      goodBullets.push(trimmed.replace(/^(\*\s*)?GOOD:/i, "").trim());
     } else if (trimmed.match(/^(\*\s*)?BAD:/i)) {
-      const text = trimmed.replace(/^(\*\s*)?BAD:/i, "").trim();
-      htmlContent += `<p class="bad-bullet"><span class="icon">👎</span>${text}</p>`;
+      badBullets.push(trimmed.replace(/^(\*\s*)?BAD:/i, "").trim());
     }
   });
-  content.innerHTML = htmlContent;
   
-  // Append header and content to shadow DOM
-  shadow.appendChild(header);
+  let htmlContent = "";
+  // Output each good bullet separately
+  goodBullets.forEach(text => {
+    htmlContent += `<p class="good-bullet"><span class="icon">👍</span>${text}</p>`;
+  });
+  // Output each bad bullet separately
+  badBullets.forEach(text => {
+    htmlContent += `<p class="bad-bullet"><span class="icon">👎</span>${text}</p>`;
+  });
+  
+  content.innerHTML = htmlContent;
   shadow.appendChild(content);
   
   // Append the container to the document body

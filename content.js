@@ -1,10 +1,17 @@
+// content.js
+
+/**
+ * 1. Grab the page’s visible text (excluding any <footer> tags).
+ */
 function getMainContentText() {
-  const clonedBody = document.body.cloneNode(true);
-  const footers = clonedBody.querySelectorAll('footer');
-  footers.forEach(footer => footer.remove());
-  return clonedBody.innerText;
+  const clone = document.body.cloneNode(true);
+  clone.querySelectorAll("footer").forEach(el => el.remove());
+  return clone.innerText;
 }
 
+/**
+ * 2. Key phrases to detect if this page is a ToS/Privacy/Agreement page.
+ */
 const agreementKeyPhrases = [
   "terms of service",
   "terms of use",
@@ -12,200 +19,191 @@ const agreementKeyPhrases = [
   "terms & conditions",
   "user agreement"
 ];
-
 const nonAgreementKeyPhrases = [
   "privacy policy",
   "cookie policy",
   "acceptable use policy"
 ];
 
+/**
+ * 3. Count how many times any of the phrases in `phrases` appear in `text`.
+ */
 function countOccurrencesForPhrases(text, phrases) {
-  let totalCount = 0;
+  let total = 0;
   phrases.forEach(phrase => {
-    const regex = new RegExp(phrase, 'gi');
-    const matches = text.match(regex);
-    const count = matches ? matches.length : 0;
-    totalCount += count;
-    console.log(`Phrase "${phrase}" found ${count} times.`);
+    const re = new RegExp(phrase, "gi");
+    const matches = text.match(re);
+    total += matches ? matches.length : 0;
   });
-  return totalCount;
+  return total;
 }
 
+/**
+ * 4. Count how many times a single `phrase` appears in `text`.
+ */
 function countPhraseOccurrences(text, phrase) {
-  const regex = new RegExp(phrase, 'gi');
-  const matches = text.match(regex);
+  const re = new RegExp(phrase, "gi");
+  const matches = text.match(re);
   return matches ? matches.length : 0;
 }
 
-function displaySummary(output) {
-  // Create a container for the popup
-  const container = document.createElement("div");
-  container.id = "tos-summary-box";
-  
-  // Attach a Shadow DOM for isolation from page styles
-  const shadow = container.attachShadow({ mode: 'open' });
-  
-  // Define our styles, header, and bullet styling
-  const style = document.createElement("style");
-  style.textContent = `
-    :host {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 350px;
-      height: 350px;
-      background-color: #fff;
-      border: 1px solid #ccc;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-      z-index: 10000;
-      font-family: 'Roboto', Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      border-radius: 4px;
-      display: flex;
-      flex-direction: column;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background-color: #fff;
-      border-bottom: 1px solid #ccc;
-      padding: 10px;
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .close-btn {
-      color: red;
-      font-size: 24px;
-      cursor: pointer;
-    }
-    .content {
-      padding: 10px;
-      overflow-y: auto;
-      flex: 1;
-    }
-    .good-bullet {
-      background-color: #e6f9e6; /* light green */
-      padding: 8px;
-      border-radius: 3px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-    }
-    .bad-bullet {
-      background-color: #ffe6e6; /* light red */
-      padding: 8px;
-      border-radius: 3px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-    }
-    .icon {
-      font-size: 18px;
-      margin-right: 8px;
-    }
+/**
+ * 5. When LLaMA returns GOOD/BAD bullets, this function builds a fixed,
+ *    360 px-wide popup in the top-right that uses YOUR popup.css.
+ */
+function displaySummary(llmOutput) {
+  // 5.1. Create a host <div> that we’ll position fixed in the page.
+  const hostDiv = document.createElement("div");
+  hostDiv.style.position = "fixed";
+  hostDiv.style.top = "20px";
+  hostDiv.style.right = "20px";
+  hostDiv.style.zIndex = "10000";
+  document.body.appendChild(hostDiv);
+
+  // 5.2. Attach a Shadow DOM to isolate the CSS.
+  const shadow = hostDiv.attachShadow({ mode: "open" });
+
+  // 5.3. Inject a <link> to load your popup.css inside the Shadow DOM.
+  //      This is CRUCIAL: it ensures all of popup.css’s rules apply.
+  const linkElem = document.createElement("link");
+  linkElem.rel = "stylesheet";
+  linkElem.href = chrome.runtime.getURL("popup.css");
+  shadow.appendChild(linkElem);
+
+  // 5.4. Create an inner <div class="popup-container">…</div>,
+  //      exactly as in your original popup.html (minus the manual button/status).
+  const wrapper = document.createElement("div");
+  wrapper.className = "popup-container";
+  // Force the same width you had in popup.css: 360px.
+  wrapper.style.width = "360px";
+
+  // 5.5. Inner HTML: same structure you used in popup.html,
+  //      except remove the <button> and <p id="statusText"> because this is automatic.
+  //      We also add a <span class="close-btn-overlay">✖</span> so the user can close.
+  wrapper.innerHTML = `
+    <div class="header">
+      <img src="${chrome.runtime.getURL("logo.png")}" alt="Quick Terms logo" class="icon" />
+      <h1>Quick Terms</h1>
+      <div class="progress-bar">
+        <div id="goodBar" class="bar good"></div>
+        <div id="badBar"  class="bar bad"></div>
+      </div>
+    </div>
+
+    <div id="summaryOutput"></div>
+
+    <span class="close-btn-overlay">✖</span>
   `;
-  shadow.appendChild(style);
-  
-  // Create header element with title and close button
-  const header = document.createElement("div");
-  header.className = "header";
-  header.innerHTML = `<span>ToS Summarization</span><span class="close-btn">✖</span>`;
-  header.querySelector(".close-btn").addEventListener("click", () => {
-    container.remove();
-  });
-  shadow.appendChild(header);
-  
-  // Create content container
-  const content = document.createElement("div");
-  content.className = "content";
-  
-  // Group lines manually by GOOD and BAD
-  const goodBullets = [];
-  const badBullets = [];
-  
-  const lines = output.split("\n");
+  shadow.appendChild(wrapper);
+
+  // 5.6. Fill #summaryOutput with GOOD/BAD bullets. Ensure scrolling at 300px max-height.
+  const summaryContainer = shadow.getElementById("summaryOutput");
+  summaryContainer.style.maxHeight = "300px";
+  summaryContainer.style.overflowY = "auto";
+
+  const lines = llmOutput.split("\n").map(line => line.trim());
+  let goodCount = 0, badCount = 0;
+
   lines.forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed.match(/^(\*\s*)?GOOD:/i)) {
-      goodBullets.push(trimmed.replace(/^(\*\s*)?GOOD:/i, "").trim());
-    } else if (trimmed.match(/^(\*\s*)?BAD:/i)) {
-      badBullets.push(trimmed.replace(/^(\*\s*)?BAD:/i, "").trim());
+    if (/^\*\s*GOOD:/i.test(line)) {
+      goodCount++;
+      const text = line.replace(/^\*\s*GOOD:/i, "").trim();
+      const bullet = document.createElement("div");
+      bullet.className = "good";
+      bullet.textContent = text;
+      summaryContainer.appendChild(bullet);
+    } else if (/^\*\s*BAD:/i.test(line)) {
+      badCount++;
+      const text = line.replace(/^\*\s*BAD:/i, "").trim();
+      const bullet = document.createElement("div");
+      bullet.className = "bad";
+      bullet.textContent = text;
+      summaryContainer.appendChild(bullet);
     }
   });
-  
-  let htmlContent = "";
-  // Output each good bullet separately
-  goodBullets.forEach(text => {
-    htmlContent += `<p class="good-bullet"><span class="icon">👍</span>${text}</p>`;
-  });
-  // Output each bad bullet separately
-  badBullets.forEach(text => {
-    htmlContent += `<p class="bad-bullet"><span class="icon">👎</span>${text}</p>`;
-  });
-  
-  content.innerHTML = htmlContent;
-  shadow.appendChild(content);
-  
-  // Append the container to the document body
-  document.body.appendChild(container);
+
+  // 5.7. Update progress bars, exactly as your popup.js did.
+  const total = goodCount + badCount;
+  const goodBar = shadow.getElementById("goodBar");
+  const badBar  = shadow.getElementById("badBar");
+  if (total > 0) {
+    const goodPct = (goodCount / total) * 100 + "%";
+    const badPct  = (badCount  / total) * 100 + "%";
+    goodBar.style.width = goodPct;
+    badBar.style.width  = badPct;
+  } else {
+    goodBar.style.width = "0%";
+    badBar.style.width  = "0%";
+  }
+
+  // 5.8. Make the “✖” close button remove the overlay on click.
+  const closeBtn = shadow.querySelector(".close-btn-overlay");
+  closeBtn.style.position = "absolute";
+  closeBtn.style.top = "8px";
+  closeBtn.style.right = "8px";
+  closeBtn.style.fontSize = "18px";
+  closeBtn.style.cursor = "pointer";
+  closeBtn.style.color = "#999";
+  closeBtn.addEventListener("mouseover", () => { closeBtn.style.color = "#e00"; });
+  closeBtn.addEventListener("mouseout",  () => { closeBtn.style.color = "#999"; });
+  closeBtn.addEventListener("click", () => { hostDiv.remove(); });
 }
 
+/**
+ * 6. Send a prompt to your LLaMA proxy. If it returns anything other than “N/A,”
+ *    call displaySummary(llmOutput).
+ */
 function sendToLLAMAModel(prompt) {
   fetch("https://my-proxy-server-tos.onrender.com/api/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      "model": "meta-llama/llama-3.3-70b-instruct:free",
-      "messages": [
-        { "role": "user", "content": prompt }
-      ],
-      "temperature": 0
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0
     })
   })
-  .then(response => response.json())
-  .then(data => {
-    const output = data.choices && data.choices[0]
-      ? data.choices[0].message.content
-      : "No output";
-    console.log("LLaMA model output:", output);
-    if (output.trim() !== "N/A") {
-      displaySummary(output);
-    }
-  })
-  .catch(error => {
-    console.error("Error communicating with LLaMA model:", error);
-  });
+    .then(res => res.json())
+    .then(data => {
+      const output = data.choices?.[0]?.message?.content || "No output";
+      if (output.trim() !== "N/A") {
+        displaySummary(output);
+      }
+    })
+    .catch(err => console.error("Error contacting LLaMA:", err));
 }
 
-// Exclude Google search pages
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "summarize") {
-    // Optional: exclude pages like Google search
-    if (window.location.href.includes("google.com/search")) {
-      console.log("Google search page — skipping.");
-      sendResponse({ summary: "N/A" });
-      return;
-    }
+/**
+ * 7. Immediately run this detection logic at document_end. If the page looks
+ *    like a ToS/Privacy/Agreement page, send a message to background (for badge)
+ *    and then call LLaMA → displaySummary().
+ */
+(function autoDetectAndSummarize() {
+  // (Optional) skip Google Search results pages
+  if (window.location.href.includes("google.com/search")) return;
 
-    const mainText = getMainContentText();
+  // 7.1. Grab the page’s main text
+  const mainText = getMainContentText();
 
-    const agreementOccurrenceCount = countOccurrencesForPhrases(mainText, agreementKeyPhrases);
-    const nonAgreementOccurrenceCount = countOccurrencesForPhrases(mainText, nonAgreementKeyPhrases);
-    const youAgreeCount = countPhraseOccurrences(mainText, "you agree to");
+  // 7.2. Count key phrases
+  const agreementCount    = countOccurrencesForPhrases(mainText, agreementKeyPhrases);
+  const nonAgreementCount = countOccurrencesForPhrases(mainText, nonAgreementKeyPhrases);
+  const youAgreeCount     = countPhraseOccurrences(mainText, "you agree to");
 
-    const isAgreementCandidate = (agreementOccurrenceCount >= 3 && youAgreeCount >= 1);
-    const isNonAgreementCandidate = (nonAgreementOccurrenceCount >= 3);
+  // 7.3. Decide if it’s a candidate ToS page
+  const isAgreementCandidate    = (agreementCount >= 3 && youAgreeCount >= 1);
+  const isNonAgreementCandidate = (nonAgreementCount >= 3);
 
-    if (isAgreementCandidate || isNonAgreementCandidate) {
-      const prompt = `
+  if (isAgreementCandidate || isNonAgreementCandidate) {
+    // (Optional) Notify background.js to set a “ToS” badge
+    chrome.runtime.sendMessage({ action: "highlightAction" });
+
+    // 7.4. Build the same LLaMA prompt you used before
+    const prompt = `
 Please analyze the following text:
-  
+
 "${mainText}"
-  
+
 Determine if this text is a dedicated Terms of Service, User Agreement, Privacy Policy, or similar legal document. If it is not, simply respond with "N/A" and no additional text.
 
 If it is, extract and summarize only the most important clauses in clear, layman's terms. Present the output using bullet points in the following exact format:
@@ -216,34 +214,7 @@ If it is, extract and summarize only the most important clauses in clear, layman
 * BAD: [Another detrimental clause]
 
 Ensure that each beneficial clause is labeled with "GOOD:" and each detrimental clause with "BAD:" — do not mix or include any extra text beyond these bullet points.
-      `;
-
-      // Fetch and return result to popup
-      fetch("https://my-proxy-server-tos.onrender.com/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "model": "meta-llama/llama-3.3-70b-instruct:free",
-          "messages": [{ role: "user", content: prompt }],
-          "temperature": 0
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        const output = data.choices?.[0]?.message?.content || "No output";
-        sendResponse({ summary: output }); // send to popup
-      })
-      .catch(error => {
-        console.error("Fetch error:", error);
-        sendResponse({ summary: "Error connecting to model." });
-      });
-
-      return true; // Tells Chrome: "I will respond asynchronously"
-    } else {
-      sendResponse({ summary: "No relevant content found." });
-    }
+    `;
+    sendToLLAMAModel(prompt);
   }
-});
-
+})();

@@ -182,29 +182,26 @@ function sendToLLAMAModel(prompt) {
 }
 
 // Exclude Google search pages
-if (window.location.href.includes("google.com/search")) {
-  console.log("This is a Google search page. Skipping summarization.");
-} else {
-  const mainText = getMainContentText();
-  
-  const agreementOccurrenceCount = countOccurrencesForPhrases(mainText, agreementKeyPhrases);
-  console.log("Total agreement key phrase occurrences:", agreementOccurrenceCount);
-  
-  const nonAgreementOccurrenceCount = countOccurrencesForPhrases(mainText, nonAgreementKeyPhrases);
-  console.log("Total non-agreement key phrase occurrences:", nonAgreementOccurrenceCount);
-  
-  const youAgreeCount = countPhraseOccurrences(mainText, "you agree to");
-  console.log(`Phrase "you agree to" found ${youAgreeCount} times.`);
-  
-  // Candidate conditions:
-  //   1. Agreement: agreement phrases >= 3 AND "you agree to" >= 1
-  //   2. Non-agreement: non-agreement phrases >= 3
-  const isAgreementCandidate = (agreementOccurrenceCount >= 3 && youAgreeCount >= 1);
-  const isNonAgreementCandidate = (nonAgreementOccurrenceCount >= 3);
-  
-  if (isAgreementCandidate || isNonAgreementCandidate) {
-    console.log("Candidate for summarization detected.");
-    const prompt = `
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "summarize") {
+    // Optional: exclude pages like Google search
+    if (window.location.href.includes("google.com/search")) {
+      console.log("Google search page — skipping.");
+      sendResponse({ summary: "N/A" });
+      return;
+    }
+
+    const mainText = getMainContentText();
+
+    const agreementOccurrenceCount = countOccurrencesForPhrases(mainText, agreementKeyPhrases);
+    const nonAgreementOccurrenceCount = countOccurrencesForPhrases(mainText, nonAgreementKeyPhrases);
+    const youAgreeCount = countPhraseOccurrences(mainText, "you agree to");
+
+    const isAgreementCandidate = (agreementOccurrenceCount >= 3 && youAgreeCount >= 1);
+    const isNonAgreementCandidate = (nonAgreementOccurrenceCount >= 3);
+
+    if (isAgreementCandidate || isNonAgreementCandidate) {
+      const prompt = `
 Please analyze the following text:
   
 "${mainText}"
@@ -219,10 +216,34 @@ If it is, extract and summarize only the most important clauses in clear, layman
 * BAD: [Another detrimental clause]
 
 Ensure that each beneficial clause is labeled with "GOOD:" and each detrimental clause with "BAD:" — do not mix or include any extra text beyond these bullet points.
-    `;
-    console.log("Sending prompt to LLaMA model...");
-    sendToLLAMAModel(prompt);
-  } else {
-    console.log("Not enough key phrases detected. Skipping summarization.");
+      `;
+
+      // Fetch and return result to popup
+      fetch("https://my-proxy-server-tos.onrender.com/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "meta-llama/llama-3.3-70b-instruct:free",
+          "messages": [{ role: "user", content: prompt }],
+          "temperature": 0
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const output = data.choices?.[0]?.message?.content || "No output";
+        sendResponse({ summary: output }); // send to popup
+      })
+      .catch(error => {
+        console.error("Fetch error:", error);
+        sendResponse({ summary: "Error connecting to model." });
+      });
+
+      return true; // Tells Chrome: "I will respond asynchronously"
+    } else {
+      sendResponse({ summary: "No relevant content found." });
+    }
   }
-}
+});
+

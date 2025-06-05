@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Quick Terms</title>
+  <link rel="stylesheet" href="popup.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="header">
+    <img src="logo.png" alt="Quick Terms logo" class="icon" />
+    <h1>Quick Terms</h1>
+    <div class="progress-bar">
+        <div id="goodBar" class="bar good"></div>
+        <div id="badBar" class="bar bad"></div>
+    </div>    
+  </div>
+
+  <button id="summarizeBtn">Summarize Page</button>
+  <p id="statusText">Waiting for input...</p>
+
+  <div id="summaryOutput"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
